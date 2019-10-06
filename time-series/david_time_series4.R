@@ -174,3 +174,6 @@ Box.test(dummy.sarima.diff.ts, type = "Ljung-Box")
 forecast(dummy.sarima.diff.ts, h = 10)
 plot(forecast(dummy.sarima.diff.ts, h = 10))
 
+# To Do: 
+# Take forecast and evaluate against validation set
+
