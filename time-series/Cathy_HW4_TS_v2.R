@@ -38,8 +38,12 @@ DateRange <- seq(min(data$Date), max(data$Date), by = 1)
 # Calculate missing values in Date col- 353
 length(DateRange[!DateRange %in% data$Date])
 
-# Create a z object to check for missing value after aggregated month
+# Create a z object that has only the Date (YYYY-MM-DD) for each date from 2014-01-01 to 2018-12-31 
+# and Daily Mean PM2.5
 z <- zoo(data$Daily.Mean.PM2.5.Concentration, data$Date)
+
+# Aggregate from Jan 2014 to Dec 2018 by month
+# Value of Daily Mean PM2.5 is the mean
 monthavg <- aggregate(z, as.yearmon, mean)
 
 # Create Training (1300 obs 18 vars) & Validation (173 obs 18 vars) Data Set
@@ -122,7 +126,7 @@ adf.test(ts.seas.resid, alternative = "stationary", k = 2) # p-value = 0.02688
 
 # Fit Linear Regression
 x <- seq(1,54)
-arima.trend=Arima(ts.seas.resid, xreg=x,order=c(0,0,0))
+arima.trend=Arima(ts.seas.resid, xreg=x, order=c(0,0,0))
 summary(arima.trend)
 
 # Plot the residuals plot
@@ -162,15 +166,19 @@ adf.test(ts.resid, alternative = "stationary", k = 0) # p-value = 0.01
 
 # Ljung-Box Test No MA or AR term #
 # spike at lag 1
-Acf(ts.resid, lag=48,main = " Autocorrelation Plot")$acf 
+# lag = 60 - going 5 seasons back
+# not a pureexponential decay in the seasonal lags of the ACF;
 
-# spike at lag 1 and lag 12, which suggest seasonal AR 1?
-Pacf(ts.resid, lag=48, main = "Partial Correlation Plot")$acf 
+Acf(ts.resid, lag=60,main = " Autocorrelation Plot")$acf 
+
+# spikes at lag 1 and lag 12 in the PACF, which suggest seasonal AR 1?
+
+Pacf(ts.resid, lag=60, main = "Partial Correlation Plot")$acf 
 
 # Check white noise No MA or AR term 
 # Pull out p-values
-White.LB <- rep(NA, 48)
-for(i in 1:48){
+White.LB <- rep(NA, 60)
+for(i in 1:60){
   White.LB[i] <- Box.test(ts.resid, lag = i, type = "Ljung", fitdf = 0)$p.value
 }
 
@@ -197,7 +205,7 @@ auto.arima(ts.months.train, xreg = matrix) # ARIMA(1,0,0)(1,0,0)[12] errors
 #######################################
 
 # Create ARIMA(1,0,0)(1,0,0)[12] errors model
-arima.trend.season=Arima(ts.months.train, xreg=matrix,order=c(1,0,0), season=c(1,0,0))
+arima.trend.season=Arima(ts.months.train, xreg=matrix,order=c(1,0,0), seasonal=c(1,0,0))
 summary(arima.trend.season) 
 # MAPE on validation . On average, my model is off by __ %"
 
@@ -225,8 +233,8 @@ abline(h = 0.05, lty = "dashed", col = "black")
 # ARIMA(1,0,0)(0,0,1)[12] errors      #
 #######################################
 
-# Model 2 AR(1), seasonal ma(1), quadratic work dummy variable
-model2=Arima(ts.months.train, xreg=matrix,order=c(1,0,0), season=c(0,0,1))
+# Model 2 AR(1), seasonal MA(1), dummy variable & linear matrix
+model2=Arima(ts.months.train, xreg=matrix,order=c(1,0,0), seasonal=c(0,0,1))
 
 Acf(model2$residuals, lag=48,main = " ARIMA(1,0,0)(1,0,0)[12] errors ")$acf
 Pacf(model2$residuals, lag=48, main = "ARIMA(1,0,0)(1,0,0)[12] errors ")$acf
@@ -250,15 +258,80 @@ abline(h = 0.05, lty = "dashed", col = "black")
 
 #######################################
 # Model 3                             # 
-#       #
+# ARIMA(1,0,1)(1,0,0)[12] errors      #
 #######################################
-# play with Fourier
+
+# Model 3 AR(1), MA(1), seasonal MA(1), dummy variable & linear matrix
+model3=Arima(ts.months.train, xreg=matrix,order=c(1,0,1), seasonal=c(0,0,1))
+
+Acf(model3$residuals, lag=48,main = " ARIMA(1,0,1)(0,0,1)[12] errors ")$acf
+Pacf(model3$residuals, lag=48, main = "ARIMA(1,0,1)(0,0,1)[12] errors ")$acf
+
+# Pull out the p-values to be used for Ljung Test
+White.LB <- rep(NA, 48)
+for(i in 1:48){
+  White.LB[i] <- Box.test(model3$residuals, lag = i, type = "Ljung", fitdf = 3)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# Model 3: White Noise achieved with (1,0,1)(0,0,1)[12] errors
+
 
 #######################################
 # Model 4                             # 
-#      #
+# Fourier                             #
+# ARIMA(1,0,2)(1,0,0)[12] errors
 #######################################
-# play with other MA and AR terms
+
+# Fourier model 4 sine and 4 cosine
+fourier.model4 <-Arima(ts.months.train,order=c(0,0,0),xreg=fourier(ts.months.train,K=4))
+summary(fourier.model4)
+
+# Fourier regressor (xreg)
+f.xreg= fourier(ts.months.train,K=4)
+
+# Set my new f.xreg so the Arima model can regress on both the fourier model and the trend component
+f.matrix <- cbind(f.xreg,x)
+
+# Before fitting any MA or AR terms in fourier
+# regular MA 2?
+Acf(fourier.model4$residuals, lag=48, main="ACF Fourier No AR or MA")$acf
+
+# AR(1), seasonal AR(1)?
+Pacf(fourier.model4$residuals, lag=48, main="PACF Fourier No AR or MA")$acf
+
+# Create fourier model account for both linear trend and seasonality
+model4.tr.seas=Arima(ts.months.train, xreg=f.matrix,order=c(1,0,2), seasonal=c(1,0,0))
+
+# Create a new variable for residuals
+f.res <- model4.tr.seas$residuals
+
+Acf(f.res, lag=48,main = " whatever model ")$acf
+Pacf(f.res, lag=48, main = "whatever model ")$acf
+
+# Pull out the p-values to be used for Ljung Test
+# What should be the df?
+White.LB <- rep(NA, 48)
+for(i in 1:48){
+  White.LB[i] <- Box.test(f.res, lag = i, type = "Ljung", fitdf = 3)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# Model 4: White Noise achieved with (1,0,1)(0,0,1)[12] errors
 
 #######################################
 # Forecasting                         # 
@@ -268,18 +341,22 @@ abline(h = 0.05, lty = "dashed", col = "black")
 # Generate a sequence from 55 to 60
 x1 = seq(55,60)
 
-# Test: A matrix of dummy variable obs 55-60 (12 months)
+# test: A matrix of dummy variable obs 55-60 (12 months)
 # Note: dummy_matrix is a dummy variable from the full dataset obs 1-60
 test = dummy_matrix[55:60,]
+
+# f.test: A matrix of fourier obs 55-60 (12 months)
+# Note: dummy_matrix is a dummy variable from the full dataset obs 1-60
+f.test = dummy_matrix[55:60,]
 
 # Combine test and x1 to get a matrix of dummy variable and obs from 55 to 60 
 # so that we can use in the xreg of the forecast function
 new_xreg= cbind(test,x1)
 
-#######################################
-# Model 1                             #
-# Forecasting                         #
-#######################################
+#####################################################################
+# Model 1    ARIMA(1,0,0)(1,0,0)[12] errors                         #
+# Forecasting                                                       #
+#####################################################################
 
 # Warning message: xreg contains different column names from the xreg used in training. 
 # Please check that the regressors are in the same order
@@ -308,10 +385,10 @@ print(MAPE)
 # MAE         MAPE
 # 2.113552    0.2388704
 
-#######################################
-# Model 2                             #
-# Forecasting                         #
-#######################################
+################################################
+# Model 2 ARIMA(1,0,0)(0,0,1)[12] errors       #
+# Forecasting                                  #
+################################################
 
 model2.forecast = forecast(model2, xreg=new_xreg,h = 6)
 summary(model2.forecast)
@@ -333,3 +410,57 @@ print(MAPE)
 # Model 2 MAPE is worse than model 1
 # MAE         MAPE
 # 2.419793    0.2648123
+
+#######################################
+# Model 3                             #
+# Forecasting                         #
+#######################################
+
+model3.forecast = forecast(model3, xreg=new_xreg,h = 6)
+summary(model3.forecast)
+
+# Same confidence interval width in comparison to model 1
+# Higher forecast estimates than model 1
+plot(model3.forecast)
+
+actual = unclass(ts.months.valid)
+pred = unclass(model3.forecast$mean)
+
+# Model 3 MAE and MAPE
+error=actual-pred
+MAE=mean(abs(error))
+MAPE=mean(abs(error)/abs(actual))
+print(MAE)
+print(MAPE)
+
+# Model 3 MAPE is worse than Model 1 and Model 2
+# MAE         MAPE
+# 2.500045    0.2727406
+
+
+#######################################
+# Model 4                              #
+# Forecasting Fourier
+# ARIMA(1,0,2)(1,0,0)[12] errors
+#######################################
+
+model4.forecast = forecast(model4.tr.seas, xreg=new_xreg,h = 6)
+summary(model4.forecast)
+
+# Same confidence interval width in comparison to model 1
+# Higher forecast estimates than model 1
+plot(model4.forecast)
+
+actual = unclass(ts.months.valid)
+pred = unclass(model4.forecast$mean)
+
+# Model 4 MAE and MAPE
+error=actual-pred
+MAE=mean(abs(error))
+MAPE=mean(abs(error)/abs(actual))
+print(MAE)
+print(MAPE)
+
+# Model 4
+# MAE         MAPE
+# 2.500045    0.2727406
