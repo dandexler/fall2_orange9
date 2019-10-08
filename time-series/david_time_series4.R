@@ -139,30 +139,66 @@ adf.test(dummy.sarima$residuals, alternative = "stationary", k=2)
 
 
 
+####### Match
 
 
 
 # De-trending by regression
 
+x <- seq(1, 54)
+y <- dummy.sarima$residuals
+
+
 # De-trending by regression
-dummy.resid.ts <- ts(dummy.sarima$residuals)
-dummy.sarima.trend=Arima(dummy.resid.ts, xreg=reg,order=c(0,0,0))
-# Result: There does not seem to be a change? This is unusual. Exploring alternative de-trending methods.
+dummy.sarima.trend=Arima(y, xreg=x,order=c(0,0,0))
+tsdisplay(dummy.sarima.trend$residuals)
 
-# De-trending by differencing, exploration
-ndiffs(dummy.sarima$residuals)
-# Result: 1, indicating 1 difference should be taken
-
-# First-order differencing for linear trends
-dummy.sarima.diff <- diff(dummy.sarima$residuals)
-dummy.sarima.diff.ts <- ts(dummy.sarima.diff)
-tsdisplay(dummy.sarima.diff.ts)
-# Result: Deterministic trend has been removed
-# Evidence remains of correlation structures at ACF lag 12 and PACF 12
+acf(dummy.sarima.trend$residuals, lag.max = 25)
+pacf(dummy.sarima.trend$residuals, lag.max = 25)
 
 # Ljung-Box test for autocorrelation
-Box.test(dummy.sarima.diff.ts, type = "Ljung-Box")
+Box.test(dummy.sarima.trend$residuals, type = "Ljung-Box")
 # Result: we are not quite at white noise but much improved.
+
+White.LB <- rep(NA, 48)
+for(i in 1:48){
+  White.LB[i] <- Box.test(dummy.sarima.trend$residuals, lag = i, type = "Lj", fitdf = 0)$p.value
+}
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# Auto ARIMA to give us an idea of what ARMA terms to add
+auto.arima(dummy.sarima.trend$residuals)
+# ARIMA(1, 0, 0)(1, 0, 0)
+
+
+
+# Why do we do this?
+new_xreg <- cbind(x, reg)
+
+# To do
+# ARIMA model with AR(1), MA(1)
+dummy.sarima.trend.sarma <- Arima(dummy.sarima.trend$residuals, xreg = new_xreg,  order=c(1,0,0),season=c(1, 0, 0))
+summary(dummy.sarima.trend.sarma)
+
+tsdisplay(dummy.sarima.trend.sarma$residuals, lag.max = 48)
+
+# Ljung-Box test for autocorrelation
+Box.test(dummy.sarima.trend$residuals, type = "Ljung-Box")
+# Result: we are not quite at white noise but much improved.
+
+White.LB <- rep(NA, 48)
+for(i in 1:48){
+  White.LB[i] <- Box.test(dummy.sarima.trend.sarma$residuals, lag = i, type = "Lj", fitdf = 2)$p.value
+}
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
 
 
 
@@ -171,9 +207,10 @@ Box.test(dummy.sarima.diff.ts, type = "Ljung-Box")
 
 
 # Forecasting
-forecast(dummy.sarima.diff.ts, h = 10)
-plot(forecast(dummy.sarima.diff.ts, h = 10))
+forecast_t <- forecast(dummy.sarima.trend.sarma$residuals, h = 6)
 
-# To Do: 
-# Take forecast and evaluate against validation set
+
+
+
+plot(forecast(dummy.sarima.trend.sarma$residuals, h = 6))
 
