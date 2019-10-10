@@ -64,6 +64,7 @@ pm2_full <- monthly_pm2[1:60,]
 # Testing, change back to pm2_t and pm2_v
 pm2_t.ts <- ts(pm2_full$Amount[1:54], frequency = 12)
 pm2_v.ts <- ts(pm2_full$Amount[54:60], frequency = 12)
+pm2_full.ts <- ts(pm2_full)
 
 # Creation of Time Series object if there are missing values
 # pm2_t.ts2<-pm2_t.ts%>% na_interpolation(option = "spline")
@@ -154,6 +155,7 @@ tsdisplay(dummy.sarima.trend$residuals)
 x_v <- seq(54, 60)
 y_v <- dummy.sarima.v$residuals
 dummy.sarima.trend.v=Arima(y_v, xreg=x_v,order=c(0,0,0))
+obs_val.ts <- ts(dummy.sarima.trend.v$residuals)
 
 # Evaluating autocorrelation structure
 acf(dummy.sarima.trend$residuals, lag.max = 25)
@@ -200,7 +202,7 @@ tsdisplay(dummy.sarima.trend.sarma$residuals, lag.max = 48)
 # New model: dummy.sarima.trend.sarma --- Seasonality, trend, AR/sAR
 
 # Adding AR(1) and sAR(1) to validation *DO NOT USE FOR MODEL*
-# Doesn't work!
+# Doesn't work! Testing
 new_v <- cbind(x_v, reg_v)
 dummy.sarima.trend.sarma.v <- Arima(dummy.sarima.trend.v$residuals, xreg = new_v,  order=c(1,0,0),season=c(1, 0, 0))
 
@@ -224,6 +226,8 @@ for(i in 1:48){
   White.LB[i] <- Box.test(dummy.sarima.trend.sarma$residuals, lag = i, type = "Lj", fitdf = 2)$p.value
 }
 
+tsdisplay(dummy.sarima.trend.sarma$residuals)
+
 White.LB <- pmin(White.LB, 0.2)
 barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
 abline(h = 0.01, lty = "dashed", col = "black")
@@ -243,7 +247,7 @@ abline(h = 0.05, lty = "dashed", col = "black")
 
 ###############################################
 # Forecasting - Final model from training: 
-# dummy.sarima.trend.sarma
+# dummy.sarima.trend.sarma --- Forecasting not yet functional!
 ###############################################
 
 # Forecasted values for 6 time values out from final model 
@@ -251,30 +255,17 @@ forecast_t=forecast(dummy.sarima.trend.sarma, xreg=new_xreg,h = 6)
 summary(forecast_t)
 plot(forecast_t)
 
-# Perform similar functions to validation set
-
-# Dummy variables for validation for seasonality
-val_x = seq(55,60)
-val_xreg= cbind(val_x,val_reg)
-
-
-val_month=factor(pm2_v$mon)
-val_reg=model.matrix(~val_month)
-val_reg=reg[,-1]
-val_xreg= cbind(val_x,val_reg)
-
-
 # Needs discussion with group
 # I think we need to make the same adjustments to the validation data set as we did to test data
 # Perhaps this is built into Cathy's code?
 
 
 # Compare the predicted values to the validation data set
-compare=months.valid$mean - test.forecast$mean
+compare=pm2_v$Amount - forecast_t$mean
 plot(compare)
 
-actual = unclass(ts.months.valid)
-pred = unclass(test.forecast$mean)
+actual = dummy.sarima.trend.v$residuals
+pred = forecast_t$residuals
 
 error=actual-pred
 MAE=mean(abs(error))
@@ -285,3 +276,132 @@ print(MAPE)
 # On Validation Data Set Model 1: ARIMA(1,0,0)(1,0,0)[12] errors
 # MAE         MAPE
 # 2.113552    0.2388704
+
+
+
+################################
+# 
+#Fit QUADRATIC Regression
+# 
+################################
+xsq <- x^2
+quad_matrix<-cbind(x,xsq)
+
+# Use the time series object from the seasonal model
+arima.trend.quad=Arima(ts.seas.resid, xreg=quad_matrix, order=c(0,0,0))
+summary(arima.trend.quad)
+
+
+# New variable for quadratic trend residuals
+quad.res <- arima.trend.quad$residuals
+
+# Quadratic trend residuals plot
+# 2014-2016 period residuals shifted down to center around 0. 
+# 2017-2018 period residuals shifted up to center around 0.
+# Looks GREAT!
+plot(quad.res, xlab='Number of Observations',ylab='Residuals',main='Residuals Plot After Fitting Quadratic Trend',type='l')
+
+# Spike at lag 1 and a small spike lag 12 --> AR(1)
+Acf(quad.res, lag=36,main = " ACF No MA or AR terms")$acf 
+
+# spikes at lag 1 and lag 12 in the PACF, which suggest seasonal AR 1?
+Pacf(quad.res, lag=36, main = "PACF No MA or AR terms")$acf 
+
+# Check white noise No MA or AR term 
+# Pull out p-values
+White.LB <- rep(NA, 60)
+for(i in 1:60){
+  White.LB[i] <- Box.test(quad.res, lag = i, type = "Ljung", fitdf = 0)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# Automatic selection quadratic trend
+# Suggestion ARIMA(1,0,0)(1,0,0)[12] errors 
+# Didn't get great MAE and MAPE on validation data. 
+auto.arima(quad.res, xreg = sq_new_xreg)
+
+# New xreg - dummy matrix and quadratic trend 
+sq_new_xreg <- cbind(training, quad_matrix)
+
+# Create the model with quadratic trend
+quad.tr.model = Arima(ts.months.train, xreg=sq_new_xreg,order=c(1,0,0), seasonal=c(0,0,1))
+summary(quad.tr.model) 
+
+
+Acf(quad.tr.model$residuals, lag=36,main = " ACF (1,0,0)(0,0,1) ")$acf
+Pacf(quad.tr.model$residuals, lag=36, main = "PACF (1,0,0)(0,0,1) ")$acf
+
+# Pull out the p-values to be used for Ljung Test
+White.LB <- rep(NA, 24)
+for(i in 1:24){
+  White.LB[i] <- Box.test(quad.tr.model$residuals, lag = i, type = "Ljung", fitdf = 2)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# Yes, white noise - quad, seasonality
+
+
+
+# FORECASTING QUADRATIC
+# ARIMA(1,0,0)(0,0,1)
+quad.forecast = forecast(quad.tr.model, xreg=nreg_qmatrix,h = 6)
+summary(quad.forecast)
+
+
+Acf(quad.forecast$residuals, lag=36,main = " ACF (1,0,0)(0,0,1) ")$acf
+Pacf(quad.forecast$residuals, lag=36, main = "PACF (1,0,0)(1,0,1) ")$acf
+
+
+# Same confidence interval width in comparison to model 1
+# Higher forecast estimates than model 1
+plot(quad.forecast)
+
+actual = unclass(ts.months.valid)
+pred = unclass(quad.forecast$mean)
+
+# MAE and MAPE
+error=actual-pred
+MAE=mean(abs(error))
+MAPE=mean(abs(error)/abs(actual))
+print(MAE)
+print(MAPE)
+
+# MAE         MAPE
+# 1.347296    0.1684877
+
+# plot of forecast values with actual values
+months <- c("July2018"=7, "August 2018"=8, "September 2018"=9, "October 2018"=10, "November 2018"=11, "December 2018"=12)
+month_names <- c("July 2018", "August 2018", "September 2018", "October 2018", "November 2018", "December 2018")
+
+forecast_value <- as.vector(quad.forecast$mean)
+forecast_upper <- as.vector(quad.forecast$upper)
+forecast_lower <- as.vector(quad.forecast$lower)
+actual_value <- as.vector(ts.months.valid)
+
+
+df <- data.frame(months, actual_value=actual_value, forecast_value=forecast_value)
+
+p <- ggplot(df, aes(x=months))+
+  xlab("Months - 2018")+
+  ylab("Average Monthly Particulate Matter 2.5")+
+  geom_line(aes(y=actual_value), size=2, color="#00BFC4", alpha=0.8)+
+  geom_line(aes(y=forecast_value), size=2, color="#F8766D", alpha=0.8)+
+  geom_point(x=months, y=actual_value, shape=15, size=6, color="#00BFC4", alpha=0.8)+
+  geom_point(x=months, y=forecast_value, shape=15, size=6, color="#F8766D", alpha=0.8)+
+  geom_text(x=12, y= 13.1, label="Actual Values", color="#00BFC4")+
+  geom_text(x=11.9, y= 11.9, label="Forecasted Values", color="#F8766D")
+p
