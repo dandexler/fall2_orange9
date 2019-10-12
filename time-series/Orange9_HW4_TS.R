@@ -143,8 +143,82 @@ arima.trend=Arima(ts.seas.resid, xreg=x, order=c(0,0,0))
 summary(arima.trend)
 
 # Plot the residuals plot
-plot(arima.trend$residuals, xlab='Number of Observations',ylab='Residuals',main='Residuals Plot',type='l')
+plot(arima.trend$residuals, xlab='Number of Observations',ylab='Residuals',main='Residuals Plot  Linear Trend',type='l')
 # Still see some trend left. Let's check what would happen if we fit quadratic trend
+
+# New residual variable
+ts.resid <- arima.trend$residuals
+
+# Check ADF test after fitting the trend with residuals values
+# Stationary about the zero mean bc the residuals plot looks like it's centered around the zero mean
+adf.test(ts.resid, alternative = "stationary", k = 0) # p-value = 0.01 
+
+# ACF and PACF plots before fitting any MA or AR terms
+
+# spike at lag 1
+# not a pure exponential decay in the seasonal lags of the ACF;
+
+Acf(ts.resid, lag=36,main = " ACF Plot No MA or AR terms")$acf 
+
+# spikes at lag 1 and lag 12 in the PACF, which suggest seasonal AR 1?
+
+Pacf(ts.resid, lag=36, main = "PACF Plot No MA or AR terms")$acf 
+
+# Check white noise No MA or AR term 
+# Pull out p-values
+White.LB <- rep(NA, 60)
+for(i in 1:60){
+  White.LB[i] <- Box.test(ts.resid, lag = i, type = "Ljung", fitdf = 0)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# We don't have white noise!
+# There is still some correlation left on the left so I need to model that
+
+# Set my new xreg so the Arima model can regress on both the dummary variable and the linear trend component
+matrix <- cbind(training,x)
+
+# Automatic AR, MA term Selection Technique 
+auto.arima(ts.months.train, xreg = matrix) # ARIMA(1,0,0)(1,0,0)[12] errors 
+
+#######################################
+# Model 1                             # 
+# Linear Trend
+# Dummy variable
+# ARIMA(1,0,0)(1,0,0)[12] errors      #
+#######################################
+
+# Create ARIMA(1,0,0)(1,0,0)[12] errors model
+arima.trend.season=Arima(ts.months.train, xreg=matrix,order=c(1,0,0), seasonal=c(1,0,0))
+summary(arima.trend.season) 
+# MAPE on validation . On average, my model is off by __ %"
+
+Acf(arima.trend.season$residuals, lag=36,main = " ACF (1,0,0)(1,0,0) ")$acf
+Pacf(arima.trend.season$residuals, lag=36, main = "PACF (1,0,0)(1,0,0)")$acf
+
+# Pull out the p-values to be used for Ljung Test
+White.LB <- rep(NA, 24)
+for(i in 1:24){
+  White.LB[i] <- Box.test(arima.trend.season$residuals, lag = i, type = "Ljung", fitdf = 2)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
+# Model 1: White Noise achieved with ARIMA(1,0,0)(1,0,0)[12] errors
+# Won't be selected to forecast and test on validation data bc quadratic regression remove the trend component better than linear regression
 
 ################################
 # 
@@ -166,7 +240,7 @@ quad.res <- arima.trend.quad$residuals
 # 2014-2016 period residuals shifted down to center around 0. 
 # 2017-2018 period residuals shifted up to center around 0.
 # Looks GREAT!
-plot(quad.res, xlab='Number of Observations',ylab='Residuals',main='Residuals Plot After Fitting Quadratic Trend',type='l')
+plot(quad.res, xlab='Number of Observations',ylab='Residuals Quadratic Trend',main='Residuals Plot After Fitting Quadratic Trend',type='l')
 
 # Spike at lag 1 and a small spike lag 12 --> AR(1)
 Acf(quad.res, lag=48,main = " ACF No MA or AR terms")$acf 
@@ -179,15 +253,15 @@ Pacf(quad.res, lag=48, main = "PACF No MA or AR terms")$acf
 
 # Model 2: ARIMA(1,0,0)(1,0,0)
 
-# ARIMA(1,0,1)(0,0,0)
+# Model 3: ARIMA(1,0,1)(0,0,0)
 
-# ARIMA(1,0,1)(1,0,1)
+# Model 4: ARIMA(1,0,1)(1,0,1)
 
-# ARIMA(0,0,1)(1,0,0)
+# Model 5: ARIMA(0,0,1)(1,0,0)
 
-# ARIMA(0,0,1)(0,0,1)
+# Model 6: ARIMA(0,0,1)(0,0,1)
 
-# ARIMA(0,0,0)(1,0,1)
+# Model 7: ARIMA(0,0,0)(1,0,1)
 
 # Check white noise Before Fitting MA or AR term 
 # Anticipate that significant correlation that needs modeling
@@ -324,6 +398,22 @@ Pacf(rar1.rma1.q$residuals, lag=36, main = "PACF (1,0,1)(0,0,0) ")$acf
 
 # NO! Still significant lag at spike 12
 
+Box.test(rar1.rma1.q$residuals, lag=48, type="Ljung", fitdf = 2)$p.value
+# Reject the null and conclude that we have correlation structure left to be modeled
+
+White.LB <- rep(NA, 24)
+for(i in 1:24){
+  White.LB[i] <- Box.test(rar1.rma1.q$residuals, lag = i, type = "Ljung", fitdf = 2)$p.value
+}
+
+# H0: White Noise, No Autocorrelation
+# HA: One or more autocorrelation up to lag m are not 0
+
+White.LB <- pmin(White.LB, 0.2)
+barplot(White.LB, main = "Ljung-Box Test P-values", ylab = "Probabilities", xlab = "Lags", ylim = c(0, 0.2))
+abline(h = 0.01, lty = "dashed", col = "black")
+abline(h = 0.05, lty = "dashed", col = "black")
+
 #######################################
 # MODEL 5                             #
 # ARIMA(0,0,1)(1,0,0)                 #
@@ -370,6 +460,8 @@ abline(h = 0.05, lty = "dashed", col = "black")
 # ARIMA(0,0,0)(1,0,1)                #
 #######################################
 sar1.sma1.q= Arima(ts.months.train, xreg=sq_new_xreg,order=c(0,0,0), seasonal=c(1,0,1))
+
+summary(sar1.sma1.q)
 
 Acf(sar1.sma1.q$residuals, lag=36, main='ACF (0,0,0)(1,0,1) ')$acf
 Pacf( sar1.sma1.q$residuals, lag=36, main='PACF (0,0,0)(1,0,1)')$acf
