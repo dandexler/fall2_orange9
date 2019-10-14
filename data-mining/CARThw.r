@@ -21,8 +21,8 @@ tree = rpart(next.product ~ . - next.product, data=train,
 # Plot the original tree
 .pardefault = par()
 par(mai=c(.2,.2,.2,.2))
-plot(tree, uniform=T)
-text(tree)
+plot(tree2, uniform=T)
+text(tree2)
 
 # Get variable importance for each variable in the tree
 tree$variable.importance
@@ -47,7 +47,7 @@ plotcp(tree)
 # Tree 1 has too much information - simplify tree using age/balance/job
 # Build Tree 2 based on variable importance from original tree
 
-tree2 = rpart(next.product ~ age + balance + job, 
+tree2 = rpart(next.product ~ age + balance + housing, 
               data=train, method='class', parms = list(split='entropy'))
 
 
@@ -61,3 +61,7 @@ cat('Training Misclassification Rate:', sum(tscores!=train$next.product)/nrow(tr
 # Calculate misclassification rate on validation data set
 scores = predict(tree2, test, type='class')
 cat('Validation Misclassification Rate:',sum(scores!=test$next.product)/nrow(test))
+
+# Why wasn't CD included?
+table(bank$next.product)
+520/41188
