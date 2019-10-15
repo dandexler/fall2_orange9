@@ -1,7 +1,7 @@
 # Install packages and library
 install.packages("plyr")
 library("plyr")
-
+library(data.table)
 # Set the working directory
 # Accident
 # Run all of the files related to accident before resetting the wd to vehicle
@@ -94,8 +94,8 @@ accident <- rbind.fill(accident,accident2017)
 # accident has 624,129 obs 67 cols (YEAR AND ST_CASE)
 # ST_CASE is unique for each year
 
-# Export the Accident df to csv 
-write.csv(accident,'/Users/CathyTran/Documents/Fall II/Visualization/VIsualization Project\\Accident.csv', row.names = TRUE)
+accident <- as.data.table(accident)
+
 
 # Set the working directory
 # Vehicle
@@ -121,51 +121,48 @@ vehicle2015 <- read.csv(file="vehicle2015.csv", header=TRUE, sep=",")
 vehicle2016 <- read.csv(file="vehicle2016.csv", header=TRUE, sep=",")
 vehicle2017 <- read.csv(file="vehicle2017.csv", header=TRUE, sep=",")
 
-# Create y, y1 vars that repeat year value for the total obs that data set
+# Create y, y1 vars that repeat the year value for the total obs that data set
 # For example, for vehicle2000, repeat the value 2000 for 57594 times
 # The purpose is to create a Year variable for all of the vehicle data sets
-y<-lapply(rep(2000, nrow(vehicle2000)), as.numeric)
-y<-lapply(rep(2000, nrow(vehicle2000)), as.numeric)
-nrow(vehicle2000)
 
-
-y1<-rep(2001, count(vehicle2001))
-y2<-rep(2002, count(vehicle2002))
-y3<-rep(2003, count(vehicle2003))
-y4<-rep(2004, count(vehicle2004))
-y5<-rep(2005, count(vehicle2005))
-y6<-rep(2006, count(vehicle2006))
-y7<-rep(2007, count(vehicle2007))
-y8<-rep(2008, count(vehicle2008))
-y9<-rep(2009, count(vehicle2009))
-y10<-rep(2010, count(vehicle2010))
-y11<-rep(2011, count(vehicle2011))
-y12<-rep(2012, count(vehicle2012))
-y13<-rep(2013, count(vehicle2013))
-y14<-rep(2014, count(vehicle2014))
-y15<-rep(2015, count(vehicle2015))
-y16<-rep(2016, count(vehicle2016))
-y17<-rep(2017, count(vehicle2017))
+y<-rep(2000, nrow(vehicle2000))
+y1<-rep(2001, nrow(vehicle2001))
+y2<-rep(2002, nrow(vehicle2002))
+y3<-rep(2003, nrow(vehicle2003))
+y4<-rep(2004, nrow(vehicle2004))
+y5<-rep(2005, nrow(vehicle2005))
+y6<-rep(2006, nrow(vehicle2006))
+y7<-rep(2007, nrow(vehicle2007))
+y8<-rep(2008, nrow(vehicle2008))
+y9<-rep(2009, nrow(vehicle2009))
+y10<-rep(2010, nrow(vehicle2010))
+y11<-rep(2011, nrow(vehicle2011))
+y12<-rep(2012, nrow(vehicle2012))
+y13<-rep(2013, nrow(vehicle2013))
+y14<-rep(2014, nrow(vehicle2014))
+y15<-rep(2015, nrow(vehicle2015))
+y16<-rep(2016, nrow(vehicle2016))
+y17<-rep(2017, nrow(vehicle2017))
 
 # Creating the year variable for each year in the vehicle tables
-vehicle2000$Year <- y
-vehicle2001$Year <- y1
-vehicle2002$Year <- y2
-vehicle2003$Year <- y3
-vehicle2004$Year <- y4
-vehicle2005$Year <- y5
-vehicle2006$Year <- y6
-vehicle2007$Year <- y7
-vehicle2008$Year <- y8
-vehicle2009$Year <- y9
-vehicle2010$Year <- y10
-vehicle2011$Year <- y11
-vehicle2012$Year <- y12
-vehicle2013$Year <- y13
-vehicle2014$Year <- y14
-vehicle2015$Year <- y15
-vehicle2016$Year <- y16
-vehicle2017$Year <- y17
+vehicle2000$YEAR <- y
+vehicle2001$YEAR <- y1
+vehicle2002$YEAR <- y2
+vehicle2003$YEAR <- y3
+vehicle2004$YEAR <- y4
+vehicle2005$YEAR <- y5
+vehicle2006$YEAR <- y6
+vehicle2007$YEAR <- y7
+vehicle2008$YEAR <- y8
+vehicle2009$YEAR <- y9
+vehicle2010$YEAR <- y10
+vehicle2011$YEAR <- y11
+vehicle2012$YEAR <- y12
+vehicle2013$YEAR <- y13
+vehicle2014$YEAR <- y14
+vehicle2015$YEAR <- y15
+vehicle2016$YEAR <- y16
+vehicle2017$YEAR <- y17
 
 # Combine the vehicle tables year by year
 vehicle <- rbind.fill(vehicle2000,vehicle2001)
@@ -185,6 +182,11 @@ vehicle <- rbind.fill(vehicle,vehicle2014)
 vehicle <- rbind.fill(vehicle,vehicle2015)
 vehicle <- rbind.fill(vehicle,vehicle2016)
 vehicle <- rbind.fill(vehicle,vehicle2017)
+
+vehicle <- as.data.table(vehicle)
+
+# Rename year to YEAR
+colnames(vehicle)[colnames(vehicle)=="Year"] <- "YEAR"
 
 # Set the working directory
 # Person
@@ -212,43 +214,43 @@ person2017 <- read.csv(file="person2017.csv", header=TRUE, sep=",")
 
 
 # Creating the year variable for each year in the person tables
-x<-rep(2000, count(person2000))
-x1<-rep(2001, count(person2001))
-x2<-rep(2002, count(person2002))
-x3<-rep(2003, count(person2003))
-x4<-rep(2004, count(person2004))
-x5<-rep(2005, count(person2005))
-x6<-rep(2006, count(person2006))
-x7<-rep(2007, count(person2007))
-x8<-rep(2008, count(person2008))
-x9<-rep(2009, count(person2009))
-x10<-rep(2010, count(person2010))
-x11<-rep(2011, count(person2011))
-x12<-rep(2012, count(person2012))
-x13<-rep(2013, count(person2013))
-x14<-rep(2014, count(person2014))
-x15<-rep(2015, count(person2015))
-x16<-rep(2016, count(person2016))
-x17<-rep(2017, count(person2017))
+x<-rep(2000, nrow(person2000))
+x1<-rep(2001, nrow(person2001))
+x2<-rep(2002, nrow(person2002))
+x3<-rep(2003, nrow(person2003))
+x4<-rep(2004, nrow(person2004))
+x5<-rep(2005, nrow(person2005))
+x6<-rep(2006, nrow(person2006))
+x7<-rep(2007, nrow(person2007))
+x8<-rep(2008, nrow(person2008))
+x9<-rep(2009, nrow(person2009))
+x10<-rep(2010, nrow(person2010))
+x11<-rep(2011, nrow(person2011))
+x12<-rep(2012, nrow(person2012))
+x13<-rep(2013, nrow(person2013))
+x14<-rep(2014, nrow(person2014))
+x15<-rep(2015, nrow(person2015))
+x16<-rep(2016, nrow(person2016))
+x17<-rep(2017, nrow(person2017))
 
-person2000$Year <- x
-person2001$Year <- x1
-person2002$Year <- x2
-person2003$Year <- x3
-person2004$Year <- x4
-person2005$Year <- x5
-person2006$Year <- x6
-person2007$Year <- x7
-person2008$Year <- x8
-person2009$Year <- x9
-person2010$Year <- x10
-person2011$Year <- x11
-person2012$Year <- x12
-person2013$Year <- x13
-person2014$Year <- x14
-person2015$Year <- x15
-person2016$Year <- x16
-person2017$Year <- x17
+person2000$YEAR <- x
+person2001$YEAR <- x1
+person2002$YEAR <- x2
+person2003$YEAR <- x3
+person2004$YEAR <- x4
+person2005$YEAR <- x5
+person2006$YEAR <- x6
+person2007$YEAR <- x7
+person2008$YEAR <- x8
+person2009$YEAR <- x9
+person2010$YEAR <- x10
+person2011$YEAR <- x11
+person2012$YEAR <- x12
+person2013$YEAR <- x13
+person2014$YEAR <- x14
+person2015$YEAR <- x15
+person2016$YEAR <- x16
+person2017$YEAR <- x17
 
 
 person <- rbind.fill(person2000,person2001)
@@ -269,13 +271,30 @@ person <- rbind.fill(person,person2015)
 person <- rbind.fill(person,person2016)
 person <- rbind.fill(person,person2017)
 
+# Convert to a data table
+person <- as.data.table(person)
+
+# Rename year to YEAR
+colnames(person)[colnames(person)=="Year"] <- "YEAR"
+
 # Originally, vehicle and person don't have the var YEAR
 # Now,
 # vehicle has 941,415 obs 157 cols (YEAR AND ST_CASE)
-# accident has 726,163 obs 67 cols (YEAR AND ST_CASE)
-# person has 1586,993 obs 101 cols (YEAR AND ST_CASE)
+# accident has 64129,163 obs 67 cols (YEAR AND ST_CASE)
+# person has 1,586,993 obs 101 cols (YEAR AND ST_CASE)
 
 # needs to make st_case unique for it's only unique for each year
 
-# Merge Accident and 
-df<-merge(x=vehicle,y=accident,by="ST_CASE")
+# Left Join vehicle and accident
+# df<-merge(x=vehicle,y=accident,by="ST_CASE, YEAR")
+
+# Export the accident df to csv 
+write.csv(accident,'/Users/CathyTran/Documents/Fall II/Visualization/VIsualization Project\\Accident.csv', row.names = TRUE)
+
+# Export the person df to csv 
+write.csv(person,'/Users/CathyTran/Documents/Fall II/Visualization/VIsualization Project\\Person.csv', row.names = TRUE)
+
+# Export the vehicle df to csv 
+write.csv(vehicle,'/Users/CathyTran/Documents/Fall II/Visualization/VIsualization Project\\Vehicle.csv', row.names = TRUE)
+
+
