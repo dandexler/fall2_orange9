@@ -13,6 +13,7 @@ from sqlite3 import Error
 from tkinter import filedialog
 from tkinter import *
 
+# To do: Refactor to functional forms
 
 # Create list of year range for data
 # Adjust based on data needs
