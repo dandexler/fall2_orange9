@@ -1,17 +1,23 @@
-import datetime as dt
-import gensim
-from matplotlib import pyplot as plt
 import nltk
-nltk.download('wordnet')
-
 import numpy as np
 import os
 import pandas as pd
-from sklearn import model_selection
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
-from sklearn.metrics import adjusted_rand_score
-import spacy
+from rake_nltk import Rake
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import string
+
+# Function to remove punctuation from a string and convert to lowercase
+def remove_punctuation(text):
+    for punctuation in string.punctuation:
+        text = text.replace(punctuation, '').lower()
+    return text
+
+# Function to combine strings
+def combine_string(text):
+    text = text.replace(" ", "")
+    return text
+
 
 # Expanding pandas column output
 pd.set_option('display.max_columns', 5)
@@ -23,12 +29,6 @@ os.chdir('C:/Users/dande/Desktop/MAIN/Documents/NCState Advanced '
 transcripts = pd.read_csv('transcripts.csv')
 ted_main = pd.read_csv('ted_main.csv')
 
-# Checking for missing values
-print('Missing values in transcripts?:','\n', transcripts.isnull().sum())
-print('Missing values in ted_main?:', '\n', ted_main.isnull().sum())
-print()
-# Result: speaker_occupation variable in ted_main has 6 missing values
-
 # Deal with missing values
 
 # Merge tables on URL
@@ -39,61 +39,99 @@ ted = pd.merge(left=ted_main, right=transcripts, on="url")
 ted['film_date'] = pd.to_datetime(ted['film_date'], unit='s')
 ted['published_date'] = pd.to_datetime(ted['published_date'], unit='s')
 
-# Data splitting, seed=1
-np.random.seed(1)
-ted['random_number'] = np.random.randn(len(ted))
+##########################################################
+# Task 1: Analyze speaker occupation by year
+# Incomplete
+##########################################################
 
-# 80/20 split of TED talk data, reset indexing
-train = ted[ted['random_number'] <= 0.8]
-train.index = range(len(train))
-test = ted[ted['random_number'] > 0.8]
-test.index = range(len(test))
+# pd.set_option('display.max_rows', ted.shape[0]+1)
+# ted['speaker_occupation'].value_counts()
+# ted['year'] = [ted['film_date'][i].year for i in range(len(ted['film_date']))]
+#
+# ted_speaker_dict = {}
+# for i in range(len(ted['speaker_occupation'])):
+#     if ted['speaker_occupation'][i] not in ted_speaker_dict:
+#         ted_speaker_dict[ted['speaker_occupation'][i]] = [ted['year'][i]]
+#     else:
+#         ted_speaker_dict[ted['speaker_occupation'][i]].append(ted['year'][i])
 
-# Creating a documents list, titles of TED talks
-documents = [train['title'][i].lower() for i in range(1, len(train['title'])) ]
+#############################################################################################
+# Task 2: Create recommendation engine based on title, main speaker, description, tags
+#############################################################################################
 
-# Can skip cleaning, no HTML or XML present
+# Filters data frame to key features title, main speaker, description, tags. URL will be used to load next talk
+final_ted = ted.filter(['title', 'main_speaker', 'description', 'tags', 'url'])
 
-# Tokenize the titles
-tokenizer = nltk.tokenize.RegexpTokenizer(r'\w+')
-token_docs = [tokenizer.tokenize(str(x)) for x in documents]
+# Removes name of speaker from description before pre-processing
+for i in range(len(final_ted['description'])):
+    if final_ted['main_speaker'][i] in final_ted['description'][i]:
+        final_ted['description'][i] = final_ted['description'][i].replace(final_ted['main_speaker'][i], "")
+# 2372 names replaced, need to look into this. Names not removed designate multiple speakers or groups without speaker names in description
 
-# Removing stop words
-stop_words = nltk.corpus.stopwords.words( 'english' )
-new_token_docs = []
-for i in range(len(token_docs)):
-    stop_rem = [x for x in token_docs[i] if x not in stop_words]
-    new_token_docs.append(stop_rem)
+# Cleaning final_ted columns, making all columns lowercase
+for column in final_ted:
+    if column == 'main_speaker':
+        final_ted[column] = final_ted[column].apply(combine_string)
+    if column in ['title', 'url', 'tags']:
+        continue
+    final_ted[column] = final_ted[column].apply(remove_punctuation)
+
+# Distilling TED Talk description down to key words for each talk
+final_ted['key_words'] = ""
+for index, row in final_ted.iterrows():
+    desc = row['description']
+
+    # Uses a NLTK Rake object. English stopwords and punctuation removed.
+    rake = Rake()
+
+    # Extracting key words from TED Talk description
+    rake.extract_keywords_from_text(desc)
+
+    # Key words and scores for key words
+    dict_keys_scores = rake.get_word_degrees()
+
+    # assigning the key words to the new column for the corresponding movie
+    row['key_words'] = [row['main_speaker']]+list(dict_keys_scores.keys())
+
+# Removing description column
+final_ted.drop(columns=['description'], inplace=True)
+
+# New data frame with keywords, indexed by title. Converts key_words lists to comma-delimited string
+keyword_df = final_ted.filter(['key_words'])
+keyword_df = keyword_df.set_index(final_ted['title'])
+
+for i in range(len(keyword_df['key_words'])):
+    keyword_df['key_words'][i] = ",".join([str(x) for x in keyword_df['key_words'][i]])
+
+# Instantiates CountVectorizer
+count = CountVectorizer()
+count_matrix = count.fit_transform(keyword_df['key_words'])
+
+# Cosine similarity matrix for TED Talks
+cosine_sim = cosine_similarity(count_matrix, count_matrix)
+
+# Generate similar TED Talks based on title input
+# Matches movie titles to index
+indices = pd.Series(keyword_df.index)
 
 
-# Lemmatize the titles
-lemmatizer = nltk.stem.WordNetLemmatizer
-lemma_docs = []
-for i in range(len(new_token_docs)):
-    lemmatized_output = ' '.join([lemmatizer.lemmatize(w, w) for w in new_token_docs[i]])
-    lemma_docs.append(lemmatized_output)
+#  Function. Accepts movie title as input, returns list of 10 most similar TED Talks ranked by similarity to title
+def recommendations(title, cosine_sim=cosine_sim):
+    # Empty list of recommended movies
+    recommended_movies = []
 
-# Vectorize the titles, by English stop words
-vectorizer = TfidfVectorizer(stop_words='english')
-lemma_docs_transf = vectorizer.fit_transform(lemma_docs)
+    # Extracts index of movie that matches title
+    idx = indices[indices == title].index[0]
 
+    # Similarity scores, descending
+    score_series = pd.Series(cosine_sim[idx]).sort_values(ascending=False)
 
+    # Top 10 most similar movies
+    top_10_indexes = list(score_series.iloc[1:11].index)
 
+    # Appends top 10 movies recommended_movies
+    for i in top_10_indexes:
+        recommended_movies.append(list(keyword_df.index)[i])
 
-
-# Alternatively, can use full NLP pipeline using spaCy
-# Incomplete!
-
-# Load the large English NLP model
-nlp = spacy.load('en_core_web_lg')
-
-# The text we want to examine
-text = 'test'
-
-# Parse the text with spaCy. This runs the entire pipeline.
-doc = nlp(text)
-
-# 'doc' now contains a parsed version of text. We can use it to do anything we want!
-# For example, this will print out all the named entities that were detected:
-for entity in doc.ents:
-    print(f"{entity.text} ({entity.label_})")
+    # Returns final list
+    return recommended_movies
