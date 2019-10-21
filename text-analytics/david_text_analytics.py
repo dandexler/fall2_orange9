@@ -6,6 +6,8 @@ from rake_nltk import Rake
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import string
+import sys
+import pickle
 
 # Function to remove punctuation from a string and convert to lowercase
 def remove_punctuation(text):
@@ -110,6 +112,7 @@ count_matrix = count.fit_transform(keyword_df['key_words'])
 # Cosine similarity matrix for TED Talks
 cosine_sim = cosine_similarity(count_matrix, count_matrix)
 
+
 # Generate similar TED Talks based on title input
 # Matches movie titles to index
 indices = pd.Series(keyword_df.index)
@@ -135,3 +138,10 @@ def recommendations(title, cosine_sim=cosine_sim):
 
     # Returns final list
     return recommended_movies
+
+# Saving objects to pickle file to speed up loading for application
+data = [cosine_sim, keyword_df]
+f = open("store.pckl", "wb")
+for i in data:
+    pickle.dump(i, f)
+f.close()

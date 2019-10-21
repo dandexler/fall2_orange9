@@ -1,10 +1,8 @@
-import numpy as np
-import os
 import pickle
 import pandas as pd
 
-print(os.getcwd())
 
+# Load all data from pickle data dump. Data assumed to be in same working directory as recommendation.py
 def loadall(filename):
     with open(filename, "rb") as f:
         while True:
@@ -14,6 +12,7 @@ def loadall(filename):
                 break
 
 
+# Recommendation generator with data pulled in from pickle file
 def recommendations(title, cosine_sim=items[0]):
     # Empty list of recommended movies
     recommended_movies = []
@@ -36,5 +35,8 @@ def recommendations(title, cosine_sim=items[0]):
     return recommended_movies
 
 
+# Call to function loadall, which loads pickle data
 items = list(loadall("store.pckl"))
+
+# List index of title names
 indices = pd.Series(items[1].index)
