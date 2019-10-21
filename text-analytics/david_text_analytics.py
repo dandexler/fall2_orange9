@@ -1,19 +1,18 @@
-import nltk
-import numpy as np
 import os
 import pandas as pd
 from rake_nltk import Rake
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import string
-import sys
 import pickle
+
 
 # Function to remove punctuation from a string and convert to lowercase
 def remove_punctuation(text):
     for punctuation in string.punctuation:
         text = text.replace(punctuation, '').lower()
     return text
+
 
 # Function to combine strings
 def combine_string(text):
@@ -68,7 +67,8 @@ final_ted = ted.filter(['title', 'main_speaker', 'description', 'tags', 'url'])
 for i in range(len(final_ted['description'])):
     if final_ted['main_speaker'][i] in final_ted['description'][i]:
         final_ted['description'][i] = final_ted['description'][i].replace(final_ted['main_speaker'][i], "")
-# 2372 names replaced, need to look into this. Names not removed designate multiple speakers or groups without speaker names in description
+# 2372 names replaced, need to look into this. Names not removed designate multiple speakers or groups without
+# speaker names in description
 
 # Cleaning final_ted columns, making all columns lowercase
 for column in final_ted:
@@ -121,7 +121,7 @@ indices = pd.Series(keyword_df.index)
 #  Function. Accepts movie title as input, returns list of 10 most similar TED Talks ranked by similarity to title
 def recommendations(title, cosine_sim=cosine_sim):
     # Empty list of recommended movies
-    recommended_movies = []
+    recommended_talks = []
 
     # Extracts index of movie that matches title
     idx = indices[indices == title].index[0]
@@ -134,10 +134,11 @@ def recommendations(title, cosine_sim=cosine_sim):
 
     # Appends top 10 movies recommended_movies
     for i in top_10_indexes:
-        recommended_movies.append(list(keyword_df.index)[i])
+        recommended_talks.append(list(keyword_df.index)[i])
 
     # Returns final list
-    return recommended_movies
+    return recommended_talks
+
 
 # Saving objects to pickle file to speed up loading for application
 data = [cosine_sim, keyword_df]
